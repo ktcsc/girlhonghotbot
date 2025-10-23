@@ -285,6 +285,90 @@ async def listnews(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg += f"• {s}\n"
     await update.message.reply_text(msg, parse_mode="Markdown")
 
+# === SETTIME / REPORT ===
+async def settime(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.message.from_user.id):
+        return await update.message.reply_text("🚫 Chỉ admin có thể thay đổi giờ báo cáo.")
+    if not context.args:
+        return await update.message.reply_text("⚙️ Dùng: /settime HH:MM (vd: /settime 09:30)")
+    new_time = context.args[0]
+    # basic validation HH:MM
+    try:
+        datetime.strptime(new_time, "%H:%M")
+    except Exception:
+        return await update.message.reply_text("❌ Định dạng không hợp lệ. Dùng HH:MM (24h).")
+    cfg = load_config()
+    cfg["report_time"] = new_time
+    save_config(cfg)
+    await update.message.reply_text(f"⏰ Đã cập nhật giờ báo cáo thành {new_time}")
+
+def generate_report():
+    cfg = load_config()
+    msg = "📊 <b>BÁO CÁO TỔNG HỢP CRYPTO</b>\n\n"
+    # Market overview
+    try:
+        global_data = requests.get("https://api.coingecko.com/api/v3/global", timeout=10).json()["data"]
+        total_mcap = global_data["total_market_cap"]["usd"]
+        total_volume = global_data["total_volume"]["usd"]
+        btc_dom = global_data["market_cap_percentage"]["btc"]
+        msg += "🌍 <b>TỔNG QUAN THỊ TRƯỜNG</b>\n"
+        msg += f"• Tổng vốn hóa: ${total_mcap:,.0f}\n"
+        msg += f"• Khối lượng 24h: ${total_volume:,.0f}\n"
+        msg += f"• BTC Dominance: {btc_dom:.2f}%\n"
+        try:
+            fear = requests.get("https://api.alternative.me/fng/?limit=1", timeout=8).json()["data"][0]
+            msg += f"• Fear & Greed: {fear['value']} ({fear['value_classification']})\n"
+        except Exception:
+            msg += "• Fear & Greed: N/A\n"
+        msg += "\n"
+    except Exception:
+        msg += "⚠️ Không thể lấy dữ liệu tổng quan.\n\n"
+    # News highlights
+    msg += "📰 <b>TIN TỨC NỔI BẬT</b>\n"
+    for src in cfg.get("news_sources", []):
+        items = fetch_items_from_feed(src)[:5]
+        if not items:
+            msg += f"⚠️ Không có bài viết từ {src}\n\n"
+            continue
+        for i in items:
+            title = pyhtml.escape(getattr(i, "title", "").text.strip() if getattr(i, "title", None) else "Không có tiêu đề")
+            link = None
+            if i.find("link") and getattr(i.find("link"), "text", "").strip().startswith("http"):
+                link = i.find("link").text.strip()
+            elif i.find("guid") and "http" in getattr(i.find("guid"), "text", ""):
+                link = i.find("guid").text.strip()
+            else:
+                link = src
+            msg += f"• <a href=\"{link}\">{title}</a>\n"
+        msg += "\n"
+    # Market snapshot
+    msg += "💹 <b>THỊ TRƯỜNG HIỆN TẠI</b>\n"
+    try:
+        coins = ["bitcoin", "ethereum", "bnb", "solana", "xrp"]
+        coin_icons = {"bitcoin":"🟠","ethereum":"💎","bnb":"🟡","solana":"🟣","xrp":"💠"}
+        data = requests.get("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=" + ",".join(coins), timeout=10).json()
+        for c in data:
+            icon = coin_icons.get(c["id"], "💰")
+            msg += f"{icon} <b>{c['name']}</b>: ${c['current_price']:,.2f} ({c.get('price_change_percentage_24h',0):+.2f}%)\n"
+        market_data = requests.get("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&per_page=50", timeout=10).json()
+        top_up = sorted(market_data, key=lambda x: x.get("price_change_percentage_24h",0), reverse=True)[:3]
+        top_down = sorted(market_data, key=lambda x: x.get("price_change_percentage_24h",0))[:3]
+        msg += "\n📈 <b>Top tăng mạnh</b>\n"
+        for coin in top_up:
+            msg += f"🔹 {coin['symbol'].upper()}: +{coin['price_change_percentage_24h']:.2f}% (${coin['current_price']:,.2f})\n"
+        msg += "\n📉 <b>Top giảm mạnh</b>\n"
+        for coin in top_down:
+            msg += f"🔸 {coin['symbol'].upper()}: {coin['price_change_percentage_24h']:.2f}% (${coin['current_price']:,.2f})\n"
+    except Exception:
+        msg += "⚠️ Không thể lấy dữ liệu thị trường.\n"
+    return msg
+
+async def report_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not (is_admin(update.message.from_user.id) or is_registered(update.message.from_user.id)):
+        return await update.message.reply_text("🔒 Cần /dangky trước.")
+    msg = generate_report()
+    await update.message.reply_text(msg, parse_mode="HTML", disable_web_page_preview=True)
+
 # ====== AI CHAT ======
 async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
