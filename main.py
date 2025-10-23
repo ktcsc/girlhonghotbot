@@ -454,7 +454,7 @@ def webhook():
     """Nhận dữ liệu từ Telegram gửi về"""
     try:
         update = Update.de_json(request.get_json(force=True), application.bot)
-        # Gửi xử lý vào event loop async
+        # Chạy xử lý async trong event loop
         asyncio.get_event_loop().create_task(application.process_update(update))
         user = update.effective_user
         if user and update.message:
