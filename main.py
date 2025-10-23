@@ -9,7 +9,8 @@ from datetime import datetime
 from threading import Thread
 from flask import Flask, request
 from bs4 import BeautifulSoup
-from telegram import Update, MessageEntity, ChatAction
+from telegram import Update, MessageEntity
+from telegram.constants import ChatAction
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 
 nest_asyncio.apply()
