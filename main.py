@@ -6,7 +6,8 @@ import time
 import nest_asyncio
 from datetime import datetime
 from bs4 import BeautifulSoup
-from telegram import Update, MessageEntity, ChatAction
+from telegram import Update, MessageEntity
+from telegram.constants import ChatAction
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 from flask import Flask
 import aiohttp
