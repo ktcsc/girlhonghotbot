@@ -405,6 +405,6 @@ async def start_bot():
     app.run(host="0.0.0.0", port=PORT)
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(set_webhook())
-    app.run(host="0.0.0.0", port=PORT)
+    asyncio.run(set_webhook())
+app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
