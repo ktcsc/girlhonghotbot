@@ -426,14 +426,20 @@ async def daily_report_task(app: Application):
         await asyncio.sleep(20)
 
 # === STARTUP ===
+from threading import Thread
+
+def run_flask():
+    """Chạy Flask trong thread riêng để Render có thể ping healthcheck."""
+    port = int(os.getenv("PORT", 10000))
+    web_app.run(host="0.0.0.0", port=port)
 
 async def main():
     print("🤖 Bot @girlhonghot - starting...")
 
-    # Khởi tạo bot
+    # Khởi tạo bot Telegram
     application = Application.builder().token(BOT_TOKEN).build()
 
-    # Đăng ký lệnh
+    # Đăng ký các command handler
     handlers = [
         ("start", start),
         ("help", help_command),
@@ -459,18 +465,14 @@ async def main():
     # Tạo task chạy báo cáo định kỳ
     asyncio.create_task(daily_report_task(application))
 
-    # Chạy Flask song song
-    loop = asyncio.get_running_loop()
+    # Chạy Flask trên thread riêng (Render yêu cầu 1 endpoint để ping)
+    Thread(target=run_flask, daemon=True).start()
 
-    def run_flask():
-        web_app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
-
-    # ⚠️ GỌI poll & flask song song — KHÔNG cần await run_polling()
-    flask_future = loop.run_in_executor(None, run_flask)
-    bot_future = loop.run_in_executor(None, lambda: application.run_polling())
-
-    await asyncio.gather(bot_future, flask_future)
+    # Chạy bot Telegram trong main thread (an toàn với signal handler)
+    await application.run_polling()
 
 if __name__ == "__main__":
+    nest_asyncio.apply()  # đảm bảo asyncio hoạt động mượt trên Render
     asyncio.run(main())
+
 
