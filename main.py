@@ -8,8 +8,8 @@ from bs4 import BeautifulSoup
 import aiohttp
 import html as pyhtml
 import logging
-
-from telegram import Update, MessageEntity, ChatAction
+from telegram import Update, MessageEntity
+from telegram.constants import ChatAction
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 )
