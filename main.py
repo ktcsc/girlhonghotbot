@@ -395,6 +395,10 @@ application.add_handler(CommandHandler("top", top))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ai_chat))
 
 # ===== START WEBHOOK + DAILY TASK =====
+async def set_webhook():
+    await application.bot.set_webhook(url=WEBHOOK_URL)
+    print(f"Webhook đã được set tại {WEBHOOK_URL}")
+
 async def start_bot():
     await set_webhook()
     asyncio.create_task(send_daily_report())
