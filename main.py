@@ -9,9 +9,10 @@ from bs4 import BeautifulSoup
 from telegram import Update, MessageEntity
 from telegram.constants import ChatAction
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
-from flask import Flask
 import aiohttp
 import html as pyhtml
+from threading import Thread
+from flask import Flask, request
 
 
 # Apply nest_asyncio to avoid event loop issues on some hosts (Render)
@@ -440,27 +441,40 @@ application = None  # ⚡ Đặt global để Flask có thể truy cập
 
 
 def run_flask():
+    from flask import Flask, request
+    from telegram import Update
+    import asyncio
+
     app = Flask(__name__)
 
     @app.route("/")
     def home():
         return "OK", 200  # Render health check
 
-    # === Webhook endpoint ===
     @app.route(f"/webhook/{BOT_TOKEN}", methods=["POST"])
     def webhook():
         """Nhận dữ liệu Telegram gửi về"""
         global application
         try:
-            update = Update.de_json(request.get_json(force=True), application.bot)
-            asyncio.get_event_loop().create_task(application.process_update(update))
+            data = request.get_json(force=True)
+            update = Update.de_json(data, application.bot)
+
+            # 🔁 Đảm bảo event loop luôn chạy đúng cách
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(application.process_update(update))
+            else:
+                loop.run_until_complete(application.process_update(update))
+
             user = update.effective_user
             if user and update.message:
                 print(f"[Webhook] 📩 @{user.username or user.id}: {update.message.text}")
         except Exception as e:
             print(f"⚠️ Lỗi xử lý webhook: {e}")
+
         return "OK", 200
 
+    # Chạy Flask server trên cổng 10000 cho Render
     app.run(host="0.0.0.0", port=10000)
 
 
