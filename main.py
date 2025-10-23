@@ -254,7 +254,7 @@ cmds=[
     ("them",them),("xoa",xoa),("listuser",listuser),
     ("price",price),("top",top),
     ("news",news),("addnews",addnews),("delnews",delnews),("listnews",listnews),
-    ("settime",settime),("report",report_cmd)
+    ("settime",settime),("report",report_cmd)]
 for cmd,fn in cmds:
     application.add_handler(CommandHandler(cmd,fn))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,ai_chat))
