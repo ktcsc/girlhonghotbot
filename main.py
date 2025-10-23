@@ -1,19 +1,27 @@
 import os
 import json
-import time
 import asyncio
-import nest_asyncio
-import aiohttp
 import requests
+import time
 from datetime import datetime
 from threading import Thread
 from flask import Flask, request
 from bs4 import BeautifulSoup
+import aiohttp
+import html as pyhtml
+import nest_asyncio
+
+# Telegram imports (PTB 20+)
 from telegram import Update, MessageEntity
 from telegram.constants import ChatAction
-from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters
+)
 
-nest_asyncio.apply()
 
 # ====== CONFIG ======
 BOT_TOKEN = os.getenv("BOT_TOKEN")
