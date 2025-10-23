@@ -1,6 +1,7 @@
-python-telegram-bot>=21.6
-flask
-nest_asyncio
-requests
-feedparser
-beautifulsoup4
+python-telegram-bot==21.6
+aiohttp>=3.8.4
+flask>=2.3.2
+nest_asyncio>=1.5.6
+requests>=2.31.0
+beautifulsoup4>=4.12.2
+feedparser>=6.0.10
