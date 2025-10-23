@@ -431,90 +431,81 @@ async def daily_report_task(app: Application):
             print("⚠️ Lỗi trong daily_report_task:", e)
         await asyncio.sleep(20)
 
-# === STARTUP (WEBHOOK MODE - RENDER READY) ===
-import os
-import nest_asyncio
-import asyncio
-from flask import request
-from threading import Thread
+# === STARTUP ===
+from flask import Flask, request
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+import asyncio
 
-# === TOKEN & URL ===
-BASE_URL = os.getenv("BASE_URL", "https://girlhonghot.onrender.com")
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
-WEBHOOK_URL = f"{BASE_URL}{WEBHOOK_PATH}"
-
-# === FLASK APP (dùng chung web_app đã có ở trên) ===
-app = web_app  # tái sử dụng Flask app từ trên
-
-@app.route(WEBHOOK_PATH, methods=["POST"])
-def webhook():
-    """Nhận dữ liệu từ Telegram gửi về"""
-    try:
-        update = Update.de_json(request.get_json(force=True), application.bot)
-        # Chạy xử lý async trong event loop
-        asyncio.get_event_loop().create_task(application.process_update(update))
-        user = update.effective_user
-        if user and update.message:
-            print(f"[Webhook] 📩 @{user.username or user.id}: {update.message.text}")
-    except Exception as e:
-        print(f"⚠️ Lỗi xử lý webhook: {e}")
-    return "OK", 200
-
-# === TELEGRAM APPLICATION ===
-application = Application.builder().token(BOT_TOKEN).build()
-
-# --- Đăng ký handlers ---
-handlers = [
-    ("start", start),
-    ("help", help_command),
-    ("dangky", dangky),
-    ("them", them),
-    ("xoa", xoa),
-    ("listuser", listuser),
-    ("price", price),
-    ("top", top),
-    ("news", news),
-    ("addnews", addnews),
-    ("delnews", delnews),
-    ("listnews", listnews),
-    ("settime", settime),
-    ("report", report_cmd),
-]
-for cmd, fn in handlers:
-    application.add_handler(CommandHandler(cmd, fn))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ai_chat))
+application = None  # ⚡ Đặt global để Flask có thể truy cập
 
 
-# === TASK NỀN ===
-async def background_tasks():
-    """Chạy task báo cáo định kỳ"""
-    await asyncio.sleep(5)
-    asyncio.create_task(daily_report_task(application))
+def run_flask():
+    app = Flask(__name__)
+
+    @app.route("/")
+    def home():
+        return "OK", 200  # Render health check
+
+    # === Webhook endpoint ===
+    @app.route(f"/webhook/{BOT_TOKEN}", methods=["POST"])
+    def webhook():
+        """Nhận dữ liệu Telegram gửi về"""
+        global application
+        try:
+            update = Update.de_json(request.get_json(force=True), application.bot)
+            asyncio.get_event_loop().create_task(application.process_update(update))
+            user = update.effective_user
+            if user and update.message:
+                print(f"[Webhook] 📩 @{user.username or user.id}: {update.message.text}")
+        except Exception as e:
+            print(f"⚠️ Lỗi xử lý webhook: {e}")
+        return "OK", 200
+
+    app.run(host="0.0.0.0", port=10000)
 
 
-# === CHẠY WEBHOOK ===
-async def start_bot():
+async def main():
+    global application
     print("🤖 Bot @girlhonghot - starting with Webhook...")
-    try:
-        await application.bot.delete_webhook(drop_pending_updates=True)
-        await application.bot.set_webhook(url=WEBHOOK_URL)
-        print(f"✅ Webhook set: {WEBHOOK_URL}")
-    except Exception as e:
-        print(f"⚠️ Lỗi set webhook: {e}")
-    asyncio.create_task(background_tasks())
 
+    application = Application.builder().token(BOT_TOKEN).build()
 
-def run():
-    """Khởi động bot + Flask song song"""
-    nest_asyncio.apply()
-    Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000))), daemon=True).start()
-    asyncio.run(start_bot())
-    asyncio.get_event_loop().run_forever()
+    handlers = [
+        ("start", start),
+        ("help", help_command),
+        ("dangky", dangky),
+        ("them", them),
+        ("xoa", xoa),
+        ("listuser", listuser),
+        ("price", price),
+        ("top", top),
+        ("news", news),
+        ("addnews", addnews),
+        ("delnews", delnews),
+        ("listnews", listnews),
+        ("settime", settime),
+        ("report", report_cmd),
+    ]
+    for cmd, fn in handlers:
+        application.add_handler(CommandHandler(cmd, fn))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ai_chat))
+
+    # === Đặt webhook ===
+    WEBHOOK_URL = f"https://girlhonghot.onrender.com/webhook/{BOT_TOKEN}"
+    await application.bot.set_webhook(WEBHOOK_URL)
+    print(f"✅ Webhook set: {WEBHOOK_URL}")
+
+    # === Chạy Flask song song ===
+    from threading import Thread
+    Thread(target=run_flask, daemon=True).start()
+
+    # Giữ vòng lặp sống (nếu cần background task)
+    while True:
+        await asyncio.sleep(3600)
 
 
 if __name__ == "__main__":
-    run()
+    import asyncio
+    asyncio.run(main())
+
 
