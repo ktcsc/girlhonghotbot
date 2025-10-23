@@ -1,4 +1,5 @@
 python-telegram-bot==20.6
+Flask==3.0.3
 aiohttp
 requests
 beautifulsoup4
