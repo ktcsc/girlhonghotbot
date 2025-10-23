@@ -6,10 +6,12 @@ import nest_asyncio
 from datetime import datetime
 from bs4 import BeautifulSoup
 from telegram import Update, MessageEntity
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+)
 import aiohttp
 import html
-import time
+from flask import Flask
 
 nest_asyncio.apply()
 
@@ -42,7 +44,7 @@ def save_config(cfg):
 def is_admin(uid): return str(uid) == str(ADMIN_ID)
 def is_registered(uid): return str(uid) in load_config()["users"]
 
-# === /start & /dangky ===
+# === COMMAND HANDLERS ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     if not (is_registered(user.id) or is_admin(user.id)):
@@ -66,7 +68,6 @@ async def dangky(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
     await update.message.reply_text("🕐 Đã gửi yêu cầu đến admin, vui lòng chờ duyệt 💬")
 
-# === USER MANAGEMENT ===
 async def them(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.message.from_user.id):
         return await update.message.reply_text("🚫 Không có quyền.")
@@ -169,7 +170,7 @@ async def news(update, context):
             msg += f"⚠️ Lỗi đọc nguồn {src}\n\n"
     await update.message.reply_text(msg, parse_mode="HTML", disable_web_page_preview=False)
 
-# === AI CHAT (ChatAnywhere) ===
+# === AI CHAT ===
 async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg or not msg.text:
@@ -209,35 +210,52 @@ async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await msg.reply_text(f"⚠️ Lỗi khi gọi AI: {e}")
 
-# === DAILY REPORT (simple background loop) ===
-async def daily_report(bot):
+# === DAILY REPORT ===
+async def daily_report(application):
     while True:
         now = datetime.now().strftime("%H:%M")
         cfg = load_config()
         if now == cfg.get("report_time", "08:00"):
             try:
-                await bot.send_message(GROUP_ID, "📊 Báo cáo crypto hàng ngày đang được xử lý...")
+                await application.bot.send_message(GROUP_ID, "📊 Báo cáo crypto hàng ngày đang được xử lý...")
             except Exception as e:
                 print("⚠️ Lỗi gửi báo cáo:", e)
             await asyncio.sleep(60)
         await asyncio.sleep(20)
 
-# === MAIN ===
-app = ApplicationBuilder().token(BOT_TOKEN).build()
+# === FLASK KEEP-ALIVE ===
+web_app = Flask(__name__)
 
-for cmd, fn in [
-    ("start", start), ("dangky", dangky),
-    ("them", them), ("xoa", xoa), ("listuser", listuser),
-    ("price", price), ("news", news)
-]:
-    app.add_handler(CommandHandler(cmd, fn))
+@web_app.route('/')
+def home():
+    return "✅ Bot @girlhonghot is running on Render!"
 
-app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), ai_chat))
+# === RUN BOTH BOT & FLASK ===
+async def main():
+    print("🤖 Bot @girlhonghot đang khởi động...")
 
-async def run_bot():
-    print("🤖 Bot @girlhonghot đang chạy trên Render...")
-    asyncio.create_task(daily_report(app.bot))
-    await app.run_polling()
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    for cmd, fn in [
+        ("start", start), ("dangky", dangky),
+        ("them", them), ("xoa", xoa), ("listuser", listuser),
+        ("price", price), ("news", news)
+    ]:
+        application.add_handler(CommandHandler(cmd, fn))
+
+    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), ai_chat))
+
+    # Chạy song song Flask & Bot
+    async def run_flask():
+        port = int(os.getenv("PORT", 10000))
+        web_app.run(host="0.0.0.0", port=port)
+
+    asyncio.create_task(daily_report(application))
+    await asyncio.gather(
+        application.run_polling(),
+        asyncio.to_thread(run_flask)
+    )
 
 if __name__ == "__main__":
-    asyncio.run(run_bot())
+    asyncio.run(main())
+
