@@ -8,7 +8,12 @@
     "6847239348": "Lan Anh"
   },
   "news_sources": [
-    "https://coinphoton.com/feed",
-    "https://coin68.com/rss/tin-moi-nhat.rss"
+    "https://cointelegraph.com/rss",
+    "https://www.coindesk.com/arc/outboundfeeds/rss/",
+    "https://bitcoinmagazine.com/feed",
+    "https://decrypt.co/feed",
+    "https://vnexpress.net/rss/so-hoa/tin-tuc.rss",
+    "https://cafef.vn/crypto.chn",
+    "https://tuoitre.vn/rss/kinh-doanh.rss"
   ]
 }
