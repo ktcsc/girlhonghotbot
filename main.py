@@ -38,10 +38,8 @@ if not BOT_TOKEN:
 
 # ====== FLASK HEALTHCHECK ======
 app = Flask(__name__)
-
-@app.route("/")
-def health():
-    return "🤖 Bot @girlhonghot is running (Render)."
+bot = Bot(TOKEN)
+dispatcher = Dispatcher(bot, None, workers=0, use_context=True)
 
 # ====== CONFIG HELPERS ======
 def load_config():
@@ -80,13 +78,13 @@ def fetch_items_from_feed(src):
         return []
 
 # ====== TELEGRAM COMMANDS ======
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     if not (is_registered(user.id) or is_admin(user.id)):
         return await update.message.reply_text("🔒 Bạn chưa được kích hoạt. Dùng /dangky để gửi yêu cầu.")
     await update.message.reply_text(f"👋 Chào {user.first_name}! Tôi là @girlhonghot – trợ lý crypto của bạn 💖")
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "💡 *Hướng dẫn sử dụng:*\n"
         "• /start – Bắt đầu trò chuyện\n"
@@ -100,7 +98,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
-async def dangky(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def dangky(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     cfg = load_config()
     if str(user.id) in cfg["users"]:
@@ -111,7 +109,7 @@ async def dangky(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except: pass
     await update.message.reply_text("🕐 Đã gửi yêu cầu đến admin, vui lòng chờ duyệt 💬")
 
-async def them(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def them(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.message.from_user.id):
         return await update.message.reply_text("🚫 Không có quyền.")
     try:
@@ -125,7 +123,7 @@ async def them(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except: pass
     except: await update.message.reply_text("❌ Sai cú pháp: /them <id>")
 
-async def xoa(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def xoa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.message.from_user.id):
         return await update.message.reply_text("🚫 Không có quyền.")
     try:
@@ -137,7 +135,7 @@ async def xoa(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"🗑️ Đã xóa {uid}")
     except: await update.message.reply_text("❌ Sai cú pháp: /xoa <id>")
 
-async def listuser(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def listuser(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.message.from_user.id):
         return await update.message.reply_text("🚫 Không có quyền.")
     cfg = load_config()
@@ -150,7 +148,7 @@ async def listuser(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # === PRICE / TOP ===
 
-async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_registered(update.message.from_user.id):
         return await update.message.reply_text("🔒 Cần /dangky trước.")
     
@@ -217,7 +215,7 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"⚠️ Lỗi khi lấy giá: {e}")
 
 
-async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_registered(update.message.from_user.id):
         return await update.message.reply_text("🔒 Cần /dangky trước.")
     
@@ -264,7 +262,7 @@ def fetch_items_from_feed(src):
         print(f"⚠️ Lỗi khi đọc RSS từ {src}: {e}")
         return []
 
-async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cfg = load_config()
     msg = "📰 <b>TIN TỨC CRYPTO MỚI NHẤT</b>\n\n"
     for src in cfg.get("news_sources", []):
@@ -285,7 +283,7 @@ async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg += "\n"
     await update.message.reply_text(msg, parse_mode="HTML", disable_web_page_preview=False)
 
-async def addnews(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def addnews(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.message.from_user.id):
         return await update.message.reply_text("🚫 Không có quyền.")
     if not context.args:
@@ -298,7 +296,7 @@ async def addnews(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_config(cfg)
     await update.message.reply_text("✅ Đã thêm nguồn tin.")
 
-async def delnews(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def delnews(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.message.from_user.id):
         return await update.message.reply_text("🚫 Không có quyền.")
     if not context.args:
@@ -311,7 +309,7 @@ async def delnews(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_config(cfg)
     await update.message.reply_text("🗑️ Đã xóa nguồn tin.")
 
-async def listnews(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def listnews(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cfg = load_config()
     msg = "🗞️ *Danh sách nguồn tin:*\n\n"
     for s in cfg["news_sources"]:
@@ -319,7 +317,7 @@ async def listnews(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode="Markdown")
 
 # === SETTIME / REPORT ===
-async def settime(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def settime(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.message.from_user.id):
         return await update.message.reply_text("🚫 Chỉ admin có thể thay đổi giờ báo cáo.")
     if not context.args:
@@ -396,14 +394,14 @@ def generate_report():
         msg += "⚠️ Không thể lấy dữ liệu thị trường.\n"
     return msg
 
-async def report_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def report_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not (is_admin(update.message.from_user.id) or is_registered(update.message.from_user.id)):
         return await update.message.reply_text("🔒 Cần /dangky trước.")
     msg = generate_report()
     await update.message.reply_text(msg, parse_mode="HTML", disable_web_page_preview=True)
 
 # ====== AI CHAT ======
-async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg or not msg.text: return
     if msg.chat.type in ["group","supergroup"]:
@@ -436,7 +434,7 @@ async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text(f"⚠️ Lỗi khi gọi AI: {e}")
 
 # ====== DAILY REPORT ======
-async def fetch_fng_index():
+def fetch_fng_index():
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get("https://api.alternative.me/fng/?limit=1",timeout=8) as resp:
@@ -445,12 +443,12 @@ async def fetch_fng_index():
                 return fng.get("value","N/A"), fng.get("value_classification","N/A")
     except: return "N/A","N/A"
 
-async def fetch_market_data():
+def fetch_market_data():
     async with aiohttp.ClientSession() as session:
         async with session.get("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1&sparkline=false",timeout=10) as resp:
             return await resp.json()
 
-async def fetch_news_rss(limit=3):
+def fetch_news_rss(limit=3):
     cfg = load_config()
     news_msg = ""
     for src in cfg.get("news_sources",[]):
@@ -461,7 +459,7 @@ async def fetch_news_rss(limit=3):
             news_msg += f"• [{title}]({link})\n"
     return news_msg
 
-async def daily_report_msg():
+def daily_report_msg():
     market = await fetch_market_data()
     fng_val,fng_status = await fetch_fng_index()
     top_gain = sorted(market,key=lambda c:c.get("price_change_percentage_24h",0),reverse=True)[:5]
@@ -480,7 +478,7 @@ async def daily_report_msg():
         msg += "\n📰 *Tin tức mới:*\n" + news_msg
     return msg
 
-async def send_daily_report(app: Application):
+def send_daily_report(app: Application):
     msg = await daily_report_msg()
     cfg = load_config()
     if GROUP_ID:
@@ -490,7 +488,7 @@ async def send_daily_report(app: Application):
         try: await app.bot.send_message(uid,msg,parse_mode="Markdown",disable_web_page_preview=False)
         except: pass
 
-async def daily_report_task(app: Application):
+def daily_report_task(app: Application):
     while True:
         now = datetime.now().strftime("%H:%M")
         cfg = load_config()
@@ -501,13 +499,10 @@ async def daily_report_task(app: Application):
 
 # ====== FLASK WEBHOOK ======
 @app.route(WEBHOOK_PATH, methods=["POST"])
-async def webhook():
-    try:
-        update = Update.de_json(request.get_json(force=True), application.bot)
-        await application.process_update(update)
-    except Exception as e:
-        print("⚠️ Lỗi webhook:", e)
-    return "OK",200
+def webhook():
+    update = Update.de_json(request.get_json(force=True), bot)
+    dispatcher.process_update(update)
+    return "ok"
 
 # ====== MAIN ENTRY ======
 import nest_asyncio
@@ -552,5 +547,13 @@ async def main():
     # Chạy bot
     await application.run_polling()
 
+# ----- Root route -----
+@app.route("/")
+def index():
+    return "Bot is running! 🌟"
+
+# ----- Chạy Flask -----
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Set Webhook lần đầu (Render chỉ deploy 1 lần, nên đặt trong main.py cũng ổn)
+    bot.set_webhook(WEBHOOK_URL)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
