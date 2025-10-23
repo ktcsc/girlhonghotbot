@@ -476,34 +476,48 @@ async def webhook():
         print("⚠️ Lỗi webhook:", e)
     return "OK",200
 
-# ====== TELEGRAM APPLICATION ======
-application = Application.builder().token(BOT_TOKEN).build()
-# --- Register handlers ---
-cmds=[
-    ("start",start),("help",help_command),("dangky",dangky),
-    ("them",them),("xoa",xoa),("listuser",listuser),
-    ("price",price),("top",top),
-    ("news",news),("addnews",addnews),("delnews",delnews),("listnews",listnews),
-    ("settime",settime),("report",report_cmd)]
-for cmd,fn in cmds:
-    application.add_handler(CommandHandler(cmd,fn))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,ai_chat))
+# ====== MAIN ENTRY ======
+import nest_asyncio
+nest_asyncio.apply()
 
-async def start_bot():
-    print("🤖 Bot @girlhonghot - starting Webhook...")
-    try:
-        await application.bot.delete_webhook(drop_pending_updates=True)
-        await application.bot.set_webhook(url=WEBHOOK_URL)
-        print(f"✅ Webhook set: {WEBHOOK_URL}")
-    except Exception as e:
-        print("⚠️ Lỗi set webhook:",e)
-    asyncio.create_task(daily_report_task(application))
+async def main():
+    from telegram.ext import ApplicationBuilder
 
-def run():
-    Thread(target=lambda: app.run(host="0.0.0.0",port=int(os.getenv("PORT",10000))),daemon=True).start()
-    asyncio.run(start_bot())
-    asyncio.get_event_loop().run_forever()
+    application = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .build()
+    )
 
-if __name__=="__main__":
-    import asyncio
+    # Thêm các lệnh vào bot
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("dangky", dangky))
+    application.add_handler(CommandHandler("them", them))
+    application.add_handler(CommandHandler("xoa", xoa))
+    application.add_handler(CommandHandler("listuser", listuser))
+    application.add_handler(CommandHandler("price", price))
+    application.add_handler(CommandHandler("top", top))
+    application.add_handler(CommandHandler("news", news))
+    application.add_handler(CommandHandler("addnews", addnews))
+    application.add_handler(CommandHandler("delnews", delnews))
+    application.add_handler(CommandHandler("listnews", listnews))
+    application.add_handler(CommandHandler("settime", settime))
+    application.add_handler(CommandHandler("report", report_cmd))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ai_chat))
+
+    # Thiết lập webhook (Render yêu cầu HTTPS)
+    await application.bot.set_webhook(WEBHOOK_URL)
+    print(f"✅ Webhook set to {WEBHOOK_URL}")
+
+    # Chạy Flask song song với bot Telegram
+    loop = asyncio.get_event_loop()
+
+    # Tạo task chạy Flask server
+    loop.create_task(asyncio.to_thread(app.run, host="0.0.0.0", port=10000))
+
+    # Chạy bot
+    await application.run_polling()
+
+if __name__ == "__main__":
     asyncio.run(main())
