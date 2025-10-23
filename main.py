@@ -216,6 +216,75 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"⚠️ Lỗi: {e}")
 
+# === NEWS ===
+def fetch_items_from_feed(src):
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; girlhonghotBot/1.0)"}
+        r = requests.get(src, timeout=8, headers=headers)
+        soup = BeautifulSoup(r.content, "xml")
+        items = soup.find_all("item")
+        if not items:
+            soup = BeautifulSoup(r.content, "html.parser")
+            items = soup.find_all("item")
+        return items
+    except Exception as e:
+        print(f"⚠️ Lỗi khi đọc RSS từ {src}: {e}")
+        return []
+
+async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cfg = load_config()
+    msg = "📰 <b>TIN TỨC CRYPTO MỚI NHẤT</b>\n\n"
+    for src in cfg.get("news_sources", []):
+        items = fetch_items_from_feed(src)[:5]
+        if not items:
+            msg += f"⚠️ Không tìm thấy tin nào từ {src}\n\n"
+            continue
+        for i in items:
+            title = pyhtml.escape(getattr(i, "title", "").text.strip() if getattr(i, "title", None) else "Không có tiêu đề")
+            link = None
+            if i.find("link") and getattr(i.find("link"), "text", "").strip().startswith("http"):
+                link = i.find("link").text.strip()
+            elif i.find("guid") and "http" in getattr(i.find("guid"), "text", ""):
+                link = i.find("guid").text.strip()
+            else:
+                link = src
+            msg += f"• <a href=\"{link}\">{title}</a>\n"
+        msg += "\n"
+    await update.message.reply_text(msg, parse_mode="HTML", disable_web_page_preview=False)
+
+async def addnews(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.message.from_user.id):
+        return await update.message.reply_text("🚫 Không có quyền.")
+    if not context.args:
+        return await update.message.reply_text("⚙️ Dùng: /addnews <url>")
+    cfg = load_config()
+    url = context.args[0]
+    if url in cfg["news_sources"]:
+        return await update.message.reply_text("⚠️ Nguồn đã tồn tại.")
+    cfg["news_sources"].append(url)
+    save_config(cfg)
+    await update.message.reply_text("✅ Đã thêm nguồn tin.")
+
+async def delnews(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.message.from_user.id):
+        return await update.message.reply_text("🚫 Không có quyền.")
+    if not context.args:
+        return await update.message.reply_text("⚙️ Dùng: /delnews <url>")
+    cfg = load_config()
+    url = context.args[0]
+    if url not in cfg["news_sources"]:
+        return await update.message.reply_text("❌ Không có nguồn này.")
+    cfg["news_sources"].remove(url)
+    save_config(cfg)
+    await update.message.reply_text("🗑️ Đã xóa nguồn tin.")
+
+async def listnews(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cfg = load_config()
+    msg = "🗞️ *Danh sách nguồn tin:*\n\n"
+    for s in cfg["news_sources"]:
+        msg += f"• {s}\n"
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
 # ====== AI CHAT ======
 async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
