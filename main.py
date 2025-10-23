@@ -12,6 +12,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, ContextTyp
 from flask import Flask
 import aiohttp
 import html as pyhtml
+from threading import Thread
 
 # Apply nest_asyncio to avoid event loop issues on some hosts (Render)
 nest_asyncio.apply()
@@ -431,12 +432,15 @@ async def daily_report_task(app: Application):
         await asyncio.sleep(20)
 
 # === STARTUP ===
-from threading import Thread
-
 def run_flask():
-    """Chạy Flask trong thread riêng để Render có thể ping healthcheck."""
-    port = int(os.getenv("PORT", 10000))
-    web_app.run(host="0.0.0.0", port=port)
+    from flask import Flask
+    app = Flask(__name__)
+
+    @app.route("/")
+    def home():
+        return "OK", 200  # Render health check
+
+    app.run(host="0.0.0.0", port=10000)
 
 async def main():
     print("🤖 Bot @girlhonghot - starting...")
@@ -465,16 +469,12 @@ async def main():
 
     asyncio.create_task(daily_report_task(application))
 
-    from threading import Thread
+   from threading import Thread
     Thread(target=run_flask, daemon=True).start()
 
-    # ✅ tránh xung đột event loop khi Render restart
     await application.run_polling(close_loop=False)
-
-
+    
 if __name__ == "__main__":
     import asyncio
     asyncio.run(main())
-
-
 
