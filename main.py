@@ -12,7 +12,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, ContextTyp
 from flask import Flask
 import aiohttp
 import html as pyhtml
-from threading import Thread
+
 
 # Apply nest_asyncio to avoid event loop issues on some hosts (Render)
 nest_asyncio.apply()
