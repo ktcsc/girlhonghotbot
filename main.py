@@ -149,25 +149,38 @@ async def listuser(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg,parse_mode="Markdown")
 
 # === PRICE / TOP ===
-COIN_CACHE = {"data": [], "last_update": 0}
 
 async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_registered(update.message.from_user.id):
         return await update.message.reply_text("🔒 Cần /dangky trước.")
+    
     if not context.args:
         return await update.message.reply_text("⚙️ Dùng: /price btc hoặc /price bitcoin")
+    
     query = context.args[0].lower()
-    # Cập nhật cache coin
+
+    # Cập nhật cache coin nếu cần
     if time.time() - COIN_CACHE["last_update"] > 3600 or not COIN_CACHE["data"]:
         try:
-            COIN_CACHE["data"] = requests.get(
+            data = requests.get(
                 "https://api.coingecko.com/api/v3/coins/list", timeout=10
             ).json()
+            # đảm bảo data là danh sách dict
+            if isinstance(data, list):
+                COIN_CACHE["data"] = [c for c in data if isinstance(c, dict)]
+            else:
+                COIN_CACHE["data"] = []
             COIN_CACHE["last_update"] = time.time()
-        except Exception:
+        except Exception as e:
+            print(f"⚠️ Lỗi khi tải danh sách coin: {e}")
             COIN_CACHE["data"] = COIN_CACHE.get("data", [])
+
     coins = COIN_CACHE["data"]
+
+    # tìm theo id
     match = next((c for c in coins if c.get("id","").lower() == query), None)
+
+    # nếu không tìm theo id, tìm theo symbol
     if not match:
         symbol_matches = [c for c in coins if c.get("symbol","").lower() == query]
         if len(symbol_matches) == 1:
@@ -175,7 +188,7 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif len(symbol_matches) > 1:
             try:
                 s = requests.get(f"https://api.coingecko.com/api/v3/search?query={query}", timeout=10).json()
-                candidates = [c for c in s.get("coins", []) if c.get("symbol","").lower() == query]
+                candidates = [c for c in s.get("coins", []) if c.get("symbol","").lower() == query and isinstance(c, dict)]
                 if candidates:
                     candidates_sorted = sorted(candidates, key=lambda x: x.get("market_cap_rank") or 10**9)
                     chosen_id = candidates_sorted[0]["id"]
@@ -184,14 +197,16 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 match = symbol_matches[0] if symbol_matches else None
         else:
             match = next((c for c in coins if c.get("name","").lower() == query), None)
+
     if not match:
         return await update.message.reply_text("❌ Không tìm thấy coin.")
+
     cid = match["id"]
     try:
         res = requests.get(
             f"https://api.coingecko.com/api/v3/simple/price?ids={cid}&vs_currencies=usd", timeout=10
         ).json()
-        if cid in res:
+        if isinstance(res, dict) and cid in res:
             p = res[cid]["usd"]
             await update.message.reply_text(
                 f"💰 Giá {match.get('name', cid).title()} ({match.get('symbol','').upper()}): ${p:,}"
@@ -205,16 +220,34 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_registered(update.message.from_user.id):
         return await update.message.reply_text("🔒 Cần /dangky trước.")
+    
     try:
         data = requests.get(
             "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&per_page=10", timeout=10
         ).json()
+        
+        # đảm bảo data là danh sách dict
+        if not isinstance(data, list):
+            return await update.message.reply_text("⚠️ Lỗi dữ liệu từ API.")
+
+        # lọc các phần tử không phải dict
+        data = [c for c in data if isinstance(c, dict)]
+
+        if not data:
+            return await update.message.reply_text("⚠️ Không có dữ liệu coin.")
+
         msg = "🏆 *Top 10 Coin theo vốn hóa:*\n\n"
         for i, c in enumerate(data[:10], 1):
-            msg += f"{i}. {c.get('name')} ({c.get('symbol','').upper()}): ${c.get('current_price'):,}\n"
+            name = c.get('name', 'Unknown')
+            symbol = c.get('symbol','').upper()
+            price = c.get('current_price')
+            price_str = f"${price:,.2f}" if isinstance(price, (int, float)) else "N/A"
+            msg += f"{i}. {name} ({symbol}): {price_str}\n"
+
         await update.message.reply_text(msg, parse_mode="Markdown")
     except Exception as e:
         await update.message.reply_text(f"⚠️ Lỗi: {e}")
+
 
 # === NEWS ===
 def fetch_items_from_feed(src):
