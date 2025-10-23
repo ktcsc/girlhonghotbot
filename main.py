@@ -426,11 +426,14 @@ async def daily_report_task(app: Application):
         await asyncio.sleep(20)
 
 # === STARTUP ===
+
 async def main():
     print("🤖 Bot @girlhonghot - starting...")
+
+    # Khởi tạo bot
     application = Application.builder().token(BOT_TOKEN).build()
 
-    # Register commands
+    # Đăng ký lệnh
     handlers = [
         ("start", start),
         ("help", help_command),
@@ -450,19 +453,24 @@ async def main():
     for cmd, fn in handlers:
         application.add_handler(CommandHandler(cmd, fn))
 
-    # AI chat handler
+    # Xử lý tin nhắn thường (AI chat)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ai_chat))
 
-    # start background daily task
+    # Tạo task chạy báo cáo định kỳ
     asyncio.create_task(daily_report_task(application))
 
-    # run Flask in executor and bot polling together
+    # Chạy Flask song song
     loop = asyncio.get_running_loop()
+
     def run_flask():
         web_app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
-    flask_future = loop.run_in_executor(None, run_flask)
 
-    await asyncio.gather(application.run_polling(), flask_future)
+    # ⚠️ GỌI poll & flask song song — KHÔNG cần await run_polling()
+    flask_future = loop.run_in_executor(None, run_flask)
+    bot_future = loop.run_in_executor(None, lambda: application.run_polling())
+
+    await asyncio.gather(bot_future, flask_future)
 
 if __name__ == "__main__":
     asyncio.run(main())
+
