@@ -210,14 +210,19 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # === NEWS helpers and commands ===
 def fetch_items_from_feed(src):
     try:
-        r = requests.get(src, timeout=8)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; girlhonghotBot/1.0; +https://girlhonghot.onrender.com)"
+        }
+        r = requests.get(src, timeout=8, headers=headers)
         soup = BeautifulSoup(r.content, "xml")
         items = soup.find_all("item")
         if not items:
+            # fallback sang HTML (nhiều trang WordPress giờ không còn RSS XML)
             soup = BeautifulSoup(r.content, "html.parser")
             items = soup.find_all("item")
         return items
-    except Exception:
+    except Exception as e:
+        print(f"⚠️ Lỗi khi đọc RSS từ {src}: {e}")
         return []
 
 async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
