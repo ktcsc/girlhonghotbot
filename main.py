@@ -367,12 +367,6 @@ async def send_daily_report():
                 print(f"⚠️ Lỗi gửi báo cáo cho user {uid}: {e}")
 
 
-# ===== START WEBHOOK + DAILY TASK =====
-async def start_bot():
-    await set_webhook()
-    asyncio.create_task(send_daily_report())
-    app.run(host="0.0.0.0", port=PORT)
-
 # ===== FLASK WEBHOOK =====
 @app.route(WEBHOOK_PATH, methods=["POST"])
 def telegram_webhook():
@@ -400,10 +394,11 @@ application.add_handler(CommandHandler("price", price))
 application.add_handler(CommandHandler("top", top))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ai_chat))
 
-# ===== START WEBHOOK =====
-async def set_webhook():
-    await application.bot.set_webhook(WEBHOOK_URL)
-    logger.info(f"Webhook đã set: {WEBHOOK_URL}")
+# ===== START WEBHOOK + DAILY TASK =====
+async def start_bot():
+    await set_webhook()
+    asyncio.create_task(send_daily_report())
+    app.run(host="0.0.0.0", port=PORT)
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
