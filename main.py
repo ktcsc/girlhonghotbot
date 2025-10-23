@@ -441,10 +441,8 @@ def run_flask():
 async def main():
     print("🤖 Bot @girlhonghot - starting...")
 
-    # Khởi tạo bot Telegram
     application = Application.builder().token(BOT_TOKEN).build()
 
-    # Đăng ký các command handler
     handlers = [
         ("start", start),
         ("help", help_command),
@@ -463,21 +461,20 @@ async def main():
     ]
     for cmd, fn in handlers:
         application.add_handler(CommandHandler(cmd, fn))
-
-    # Xử lý tin nhắn thường (AI chat)
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ai_chat))
 
-    # Tạo task chạy báo cáo định kỳ
     asyncio.create_task(daily_report_task(application))
 
-    # Chạy Flask trên thread riêng (Render yêu cầu 1 endpoint để ping)
+    from threading import Thread
     Thread(target=run_flask, daemon=True).start()
 
-    # Chạy bot Telegram trong main thread (an toàn với signal handler)
-    await application.run_polling()
+    # ✅ tránh xung đột event loop khi Render restart
+    await application.run_polling(close_loop=False)
+
 
 if __name__ == "__main__":
-    nest_asyncio.apply()  # đảm bảo asyncio hoạt động mượt trên Render
+    import asyncio
     asyncio.run(main())
+
 
 
