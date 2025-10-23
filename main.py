@@ -450,11 +450,12 @@ WEBHOOK_URL = f"{BASE_URL}{WEBHOOK_PATH}"
 app = web_app  # tái sử dụng Flask app từ trên
 
 @app.route(WEBHOOK_PATH, methods=["POST"])
-async def webhook():
+def webhook():
     """Nhận dữ liệu từ Telegram gửi về"""
     try:
         update = Update.de_json(request.get_json(force=True), application.bot)
-        await application.process_update(update)
+        # Gửi xử lý vào event loop async
+        asyncio.get_event_loop().create_task(application.process_update(update))
         user = update.effective_user
         if user and update.message:
             print(f"[Webhook] 📩 @{user.username or user.id}: {update.message.text}")
