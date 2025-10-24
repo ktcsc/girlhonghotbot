@@ -334,7 +334,7 @@ async def send_daily_report():
 def telegram_webhook():
     data = request.get_json(force=True)
     update = Update.de_json(data, application.bot)
-    asyncio.get_event_loop().create_task(application.process_update(update))
+    await asyncio.sleep(60)
     return "OK", 200
 
 @app.route("/", methods=["GET"])
