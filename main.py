@@ -372,7 +372,7 @@ async def send_daily_report():
 def telegram_webhook():
     data = request.get_json(force=True)
     update = Update.de_json(data, application.bot)
-    asyncio.run_coroutine_threadsafe(application.update_queue.put(update), application.bot.loop)
+   asyncio.run_coroutine_threadsafe(application.update_queue.put(update), application.loop)
     return "OK", 200
 
 @app.route("/", methods=["GET"])
