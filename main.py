@@ -305,7 +305,6 @@ async def generate_report_msg():
     return msg
 
 async def send_daily_report():
-    await application.bot.wait_until_ready()
     while True:
         cfg = load_config()
         h, m = map(int, cfg.get("report_time", "08:00").split(":"))
