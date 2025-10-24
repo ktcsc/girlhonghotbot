@@ -368,19 +368,14 @@ async def send_daily_report():
 
 
 # ===== FLASK WEBHOOK =====
-import asyncio
-from flask import request
-
 @app.route(WEBHOOK_PATH, methods=["POST"])
 def telegram_webhook():
     data = request.get_json(force=True)
     update = Update.de_json(data, application.bot)
 
-    # Đưa update vào hàng đợi xử lý
-    asyncio.run_coroutine_threadsafe(
-        application.update_queue.put(update),
-        application.loop
-    )
+    # ✅ Cách đúng cho python-telegram-bot v21.x
+    asyncio.run(application.process_update(update))
+
     return "OK", 200
 
 @app.route("/", methods=["GET"])
