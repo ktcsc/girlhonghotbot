@@ -1,8 +1,7 @@
-# main.py
 import os
 import json
 import asyncio
-from datetime import datetime, time as dt_time
+from datetime import datetime, time as dt_time, timedelta
 from flask import Flask, request
 from bs4 import BeautifulSoup
 import aiohttp
@@ -17,8 +16,9 @@ from telegram.ext import (
 # ===== CONFIG =====
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
+GROUP_ID = os.getenv("GROUP_ID")  # 👈 thêm để gửi báo cáo vào nhóm
 CHATANYWHERE_API_KEY = os.getenv("CHATANYWHERE_API_KEY")
-BASE_URL = os.getenv("BASE_URL","https://girlhonghot.onrender.com")
+BASE_URL = os.getenv("BASE_URL", "https://girlhonghot.onrender.com")
 CONFIG_FILE = "config.json"
 WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
 WEBHOOK_URL = f"{BASE_URL}{WEBHOOK_PATH}"
@@ -27,6 +27,9 @@ PORT = int(os.getenv("PORT", 10000))
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN chưa được thiết lập!")
 
+if not CHATANYWHERE_API_KEY:
+    print("⚠️ Cảnh báo: Thiếu CHATANYWHERE_API_KEY – tính năng AI chat sẽ không hoạt động.")
+
 # ===== LOGGING =====
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,24 +37,24 @@ logger = logging.getLogger(__name__)
 # ===== CONFIG HELPERS =====
 def load_config():
     try:
-        with open(CONFIG_FILE,"r",encoding="utf-8") as f:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             cfg = json.load(f)
-    except:
+    except Exception:
         cfg = {}
-    cfg.setdefault("users",{})
-    cfg.setdefault("news_sources",["https://coin68.com/feed/"])
-    cfg.setdefault("report_time","08:00")
+    cfg.setdefault("users", {})
+    cfg.setdefault("news_sources", ["https://coin68.com/feed/"])
+    cfg.setdefault("report_time", "08:00")
     return cfg
 
 def save_config(cfg):
-    with open(CONFIG_FILE,"w",encoding="utf-8") as f:
-        json.dump(cfg,f,indent=2,ensure_ascii=False)
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
 
 def is_admin(uid):
     return str(uid) == str(ADMIN_ID)
 
 def is_registered(uid):
-    return str(uid) in load_config().get("users",{})
+    return str(uid) in load_config().get("users", {})
 
 # ===== FLASK APP =====
 app = Flask(__name__)
@@ -60,14 +63,16 @@ app = Flask(__name__)
 application = ApplicationBuilder().token(BOT_TOKEN).build()
 
 # ===== UTILS =====
-COIN_CACHE = {"last_update":0,"data":[]}
+COIN_CACHE = {"last_update": 0, "data": []}
 
 async def fetch_json(url, timeout=10):
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=timeout) as resp:
+                resp.raise_for_status()
                 return await resp.json()
-    except:
+    except Exception as e:
+        logger.warning(f"⚠️ fetch_json lỗi {url}: {e}")
         return {}
 
 async def fetch_items_from_feed(src):
@@ -76,17 +81,17 @@ async def fetch_items_from_feed(src):
         async with aiohttp.ClientSession() as session:
             async with session.get(src, headers=headers, timeout=8) as r:
                 content = await r.read()
-        soup = BeautifulSoup(content,"xml")
+        soup = BeautifulSoup(content, "xml")
         items = soup.find_all("item")
         if not items:
-            soup = BeautifulSoup(content,"html.parser")
+            soup = BeautifulSoup(content, "html.parser")
             items = soup.find_all("item")
         return items
     except Exception as e:
         logger.warning(f"⚠️ Lỗi RSS {src}: {e}")
         return []
 
-# ===== HANDLERS =====
+# ===== COMMAND HANDLERS =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     if not (is_registered(user.id) or is_admin(user.id)):
@@ -137,8 +142,10 @@ async def them(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cfg["users"][uid] = user_info.username or user_info.first_name or "User"
         save_config(cfg)
         await update.message.reply_text(f"✅ Đã kích hoạt {cfg['users'][uid]} ({uid})")
-        try: await context.bot.send_message(uid,"🎉 Bạn đã được kích hoạt! 💖")
-        except: pass
+        try:
+            await context.bot.send_message(uid, "🎉 Bạn đã được kích hoạt! 💖")
+        except:
+            pass
     except Exception as e:
         await update.message.reply_text(f"❌ Lỗi: {e}")
 
@@ -167,9 +174,9 @@ async def listuser(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("📭 Chưa có người dùng nào.")
         return
     msg = "👥 *Danh sách người dùng:*\n\n"
-    for k,v in cfg["users"].items():
+    for k, v in cfg["users"].items():
         msg += f"• {v} – `{k}`\n"
-    await update.message.reply_text(msg,parse_mode="Markdown")
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
 # ===== NEWS HANDLERS =====
 async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -184,46 +191,7 @@ async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg += "\n"
     await update.message.reply_text(msg, parse_mode="HTML", disable_web_page_preview=False)
 
-async def addnews(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.message.from_user.id):
-        await update.message.reply_text("🚫 Không có quyền.")
-        return
-    if not context.args:
-        await update.message.reply_text("⚙️ Dùng: /addnews <url>")
-        return
-    url = context.args[0]
-    cfg = load_config()
-    if url in cfg["news_sources"]:
-        await update.message.reply_text("⚠️ Nguồn đã tồn tại.")
-        return
-    cfg["news_sources"].append(url)
-    save_config(cfg)
-    await update.message.reply_text("✅ Đã thêm nguồn tin.")
-
-async def delnews(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.message.from_user.id):
-        await update.message.reply_text("🚫 Không có quyền.")
-        return
-    if not context.args:
-        await update.message.reply_text("⚙️ Dùng: /delnews <url>")
-        return
-    url = context.args[0]
-    cfg = load_config()
-    if url not in cfg["news_sources"]:
-        await update.message.reply_text("❌ Không có nguồn này.")
-        return
-    cfg["news_sources"].remove(url)
-    save_config(cfg)
-    await update.message.reply_text("🗑️ Đã xóa nguồn tin.")
-
-async def listnews(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    cfg = load_config()
-    msg = "🗞️ *Danh sách nguồn tin:*\n\n"
-    for s in cfg["news_sources"]:
-        msg += f"• {s}\n"
-    await update.message.reply_text(msg, parse_mode="Markdown")
-
-# ===== PRICE/TOP HANDLERS =====
+# ===== PRICE & TOP =====
 async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     if not is_registered(user_id):
@@ -240,9 +208,9 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
             COIN_CACHE["data"] = [c for c in data if isinstance(c, dict)]
         COIN_CACHE["last_update"] = time.time()
     coins = COIN_CACHE["data"]
-    match = next((c for c in coins if c.get("id","").lower()==query), None)
+    match = next((c for c in coins if c.get("id", "").lower() == query), None)
     if not match:
-        match = next((c for c in coins if c.get("symbol","").lower()==query), None)
+        match = next((c for c in coins if c.get("symbol", "").lower() == query), None)
     if not match:
         await update.message.reply_text("❌ Không tìm thấy coin.")
         return
@@ -250,7 +218,7 @@ async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     res = await fetch_json(f"https://api.coingecko.com/api/v3/simple/price?ids={cid}&vs_currencies=usd")
     price_val = res.get(cid, {}).get("usd")
     if price_val is not None:
-        await update.message.reply_text(f"💰 Giá {match.get('name',cid).title()} ({match.get('symbol','').upper()}): ${price_val:,}")
+        await update.message.reply_text(f"💰 Giá {match.get('name', cid).title()} ({match.get('symbol', '').upper()}): ${price_val:,}")
     else:
         await update.message.reply_text("⚠️ Không lấy được giá coin này.")
 
@@ -264,33 +232,45 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Lỗi dữ liệu từ API.")
         return
     msg = "🏆 *Top 10 Coin theo vốn hóa:*\n\n"
-    for i, c in enumerate(data[:10],1):
-        name = c.get('name','Unknown')
-        symbol = c.get('symbol','').upper()
+    for i, c in enumerate(data[:10], 1):
+        name = c.get('name', 'Unknown')
+        symbol = c.get('symbol', '').upper()
         price = c.get('current_price')
-        price_str = f"${price:,.2f}" if isinstance(price,(int,float)) else "N/A"
+        price_str = f"${price:,.2f}" if isinstance(price, (int, float)) else "N/A"
         msg += f"{i}. {name} ({symbol}): {price_str}\n"
     await update.message.reply_text(msg, parse_mode="Markdown")
 
 # ===== AI CHAT =====
 async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
-    if not msg or not msg.text: return
-    if msg.chat.type in ["group","supergroup"]:
-        if not msg.entities or not any(e.type==MessageEntity.MENTION and "@girlhonghot" in msg.text for e in msg.entities):
+    if not msg or not msg.text:
+        return
+    if msg.chat.type in ["group", "supergroup"]:
+        if not msg.entities or not any(e.type == MessageEntity.MENTION and "@girlhonghot" in msg.text for e in msg.entities):
             return
-    prompt = msg.text.replace("@girlhonghot","").strip()
-    if not prompt: return
+    prompt = msg.text.replace("@girlhonghot", "").strip()
+    if not prompt:
+        return
+    if not CHATANYWHERE_API_KEY:
+        await msg.reply_text("⚠️ AI chat chưa được cấu hình API key.")
+        return
     try:
         await context.bot.send_chat_action(chat_id=msg.chat_id, action=ChatAction.TYPING)
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 "https://api.chatanywhere.tech/v1/chat/completions",
-                headers={"Authorization": f"Bearer {CHATANYWHERE_API_KEY}","Content-Type":"application/json"},
-                json={"model":"gpt-4o-mini",
-                      "messages":[{"role":"system","content":"Bạn là trợ lý crypto dễ thương, trả lời ngắn gọn và bằng tiếng Việt."},
-                                  {"role":"user","content":prompt}],
-                      "max_tokens":500},
+                headers={
+                    "Authorization": f"Bearer {CHATANYWHERE_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "gpt-4o-mini",
+                    "messages": [
+                        {"role": "system", "content": "Bạn là trợ lý crypto dễ thương, trả lời ngắn gọn và bằng tiếng Việt."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "max_tokens": 500
+                },
                 timeout=30
             ) as resp:
                 if resp.status != 200:
@@ -302,12 +282,10 @@ async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await msg.reply_text(f"⚠️ Lỗi khi gọi AI: {e}")
 
-
 # ===== DAILY REPORT =====
 async def generate_report_msg():
     cfg = load_config()
     msg = "📊 <b>BÁO CÁO TỔNG HỢP CRYPTO</b>\n\n"
-    # Market overview
     global_data = await fetch_json("https://api.coingecko.com/api/v3/global")
     data = global_data.get("data", {})
     total_mcap = data.get("total_market_cap", {}).get("usd", 0)
@@ -316,7 +294,6 @@ async def generate_report_msg():
     msg += f"🌍 Tổng vốn hóa: ${total_mcap:,.0f}\n"
     msg += f"• Khối lượng 24h: ${total_volume:,.0f}\n"
     msg += f"• BTC Dominance: {btc_dom:.2f}%\n\n"
-    # News highlights
     msg += "📰 <b>TIN TỨC NỔI BẬT</b>\n"
     for src in cfg.get("news_sources", []):
         items = await fetch_items_from_feed(src)
@@ -331,51 +308,33 @@ async def send_daily_report():
     await application.bot.wait_until_ready()
     while True:
         cfg = load_config()
-        report_time_str = cfg.get("report_time", "08:00")
-        h, m = map(int, report_time_str.split(":"))
+        h, m = map(int, cfg.get("report_time", "08:00").split(":"))
         now = datetime.now()
         report_dt = datetime.combine(now.date(), dt_time(hour=h, minute=m))
         if now > report_dt:
             report_dt += timedelta(days=1)
-        wait_seconds = (report_dt - now).total_seconds()
-        await asyncio.sleep(wait_seconds)
+        await asyncio.sleep((report_dt - now).total_seconds())
 
         msg = await generate_report_msg()
 
-        # Gửi vào nhóm (GROUP_ID) nếu có
         if GROUP_ID:
             try:
-                await application.bot.send_message(
-                    int(GROUP_ID),
-                    msg,
-                    parse_mode="HTML",
-                    disable_web_page_preview=True
-                )
+                await application.bot.send_message(int(GROUP_ID), msg, parse_mode="HTML", disable_web_page_preview=True)
             except Exception as e:
                 print(f"⚠️ Lỗi gửi báo cáo vào nhóm: {e}")
 
-        # Gửi cho tất cả user đã đăng ký
-        for uid in cfg.get("users", {}):
+        for uid in load_config().get("users", {}):
             try:
-                await application.bot.send_message(
-                    int(uid),
-                    msg,
-                    parse_mode="HTML",
-                    disable_web_page_preview=True
-                )
+                await application.bot.send_message(int(uid), msg, parse_mode="HTML", disable_web_page_preview=True)
             except Exception as e:
                 print(f"⚠️ Lỗi gửi báo cáo cho user {uid}: {e}")
-
 
 # ===== FLASK WEBHOOK =====
 @app.route(WEBHOOK_PATH, methods=["POST"])
 def telegram_webhook():
     data = request.get_json(force=True)
     update = Update.de_json(data, application.bot)
-
-    # ✅ Cách đúng cho python-telegram-bot v21.x
-    asyncio.run(application.process_update(update))
-
+    asyncio.get_event_loop().create_task(application.process_update(update))
     return "OK", 200
 
 @app.route("/", methods=["GET"])
@@ -390,14 +349,11 @@ application.add_handler(CommandHandler("them", them))
 application.add_handler(CommandHandler("xoa", xoa))
 application.add_handler(CommandHandler("listuser", listuser))
 application.add_handler(CommandHandler("news", news))
-application.add_handler(CommandHandler("addnews", addnews))
-application.add_handler(CommandHandler("delnews", delnews))
-application.add_handler(CommandHandler("listnews", listnews))
 application.add_handler(CommandHandler("price", price))
 application.add_handler(CommandHandler("top", top))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ai_chat))
 
-# ===== START WEBHOOK + DAILY TASK =====
+# ===== STARTUP =====
 async def set_webhook():
     await application.bot.set_webhook(url=WEBHOOK_URL)
     print(f"Webhook đã được set tại {WEBHOOK_URL}")
@@ -405,9 +361,11 @@ async def set_webhook():
 async def start_bot():
     await set_webhook()
     asyncio.create_task(send_daily_report())
-    app.run(host="0.0.0.0", port=PORT)
+    from hypercorn.asyncio import serve
+    from hypercorn.config import Config
+    cfg = Config()
+    cfg.bind = [f"0.0.0.0:{PORT}"]
+    await serve(app, cfg)
 
 if __name__ == "__main__":
-    asyncio.run(set_webhook())
-app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-
+    asyncio.run(start_bot())
