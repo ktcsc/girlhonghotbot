@@ -334,12 +334,10 @@ async def send_daily_report():
 def telegram_webhook():
     data = request.get_json(force=True)
     update = Update.de_json(data, application.bot)
-    await asyncio.sleep(60)
+    
+    # chạy trong event loop của ứng dụng
+    asyncio.run_coroutine_threadsafe(application.process_update(update), application._loop)
     return "OK", 200
-
-@app.route("/", methods=["GET"])
-def index():
-    return "Bot is running 🌟", 200
 
 # ===== REGISTER HANDLERS =====
 application.add_handler(CommandHandler("start", start))
