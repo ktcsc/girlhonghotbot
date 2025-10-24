@@ -329,14 +329,30 @@ async def send_daily_report():
                 print(f"⚠️ Lỗi gửi báo cáo cho user {uid}: {e}")
 
 # ===== FLASK WEBHOOK =====
+from flask import Flask, request
+from telegram import Update
+from telegram.ext import Application
+
+app = Flask(__name__)
+
+WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"  # thay BOT_TOKEN = token thật của bạn
+
 @app.route(WEBHOOK_PATH, methods=["POST"])
 def telegram_webhook():
+    """Xử lý update từ Telegram"""
     data = request.get_json(force=True)
     update = Update.de_json(data, application.bot)
-    
-    # chạy trong event loop của ứng dụng
-    asyncio.run_coroutine_threadsafe(application.process_update(update), application._loop)
+
+    # ✅ Dùng create_task thay cho asyncio.run_coroutine_threadsafe
+    application.create_task(application.process_update(update))
+
     return "OK", 200
+
+@app.route("/", methods=["GET"])
+def index():
+    """Trang kiểm tra bot"""
+    return "Bot is running 🌟", 200
+
 
 # ===== REGISTER HANDLERS =====
 application.add_handler(CommandHandler("start", start))
