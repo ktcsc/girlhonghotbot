@@ -20,8 +20,6 @@ GROUP_ID = os.getenv("GROUP_ID")  # 👈 thêm để gửi báo cáo vào nhóm
 CHATANYWHERE_API_KEY = os.getenv("CHATANYWHERE_API_KEY")
 BASE_URL = os.getenv("BASE_URL", "https://girlhonghot.onrender.com")
 CONFIG_FILE = "config.json"
-WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
-WEBHOOK_URL = f"{BASE_URL}{WEBHOOK_PATH}"
 PORT = int(os.getenv("PORT", 10000))
 
 if not BOT_TOKEN:
@@ -328,20 +326,6 @@ async def send_daily_report():
             except Exception as e:
                 print(f"⚠️ Lỗi gửi báo cáo cho user {uid}: {e}")
 
-# ===== FLASK WEBHOOK =====
-
-
-@app.route(WEBHOOK_PATH, methods=["POST"])
-async def telegram_webhook():
-    try:
-        data = request.get_json(force=True)
-        update = Update.de_json(data, application.bot)
-        await application.process_update(update)
-    except Exception as e:
-        print(f"[Webhook Error] {e}")
-    return "OK", 200
-
-
 
 # ===== REGISTER HANDLERS =====
 application.add_handler(CommandHandler("start", start))
@@ -356,9 +340,6 @@ application.add_handler(CommandHandler("top", top))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ai_chat))
 
 # ===== STARTUP =====
-async def set_webhook():
-    await application.bot.set_webhook(url=WEBHOOK_URL)
-    print(f"Webhook đã được set tại {WEBHOOK_URL}")
 
 async def start_bot():
     await set_webhook()
