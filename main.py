@@ -342,7 +342,6 @@ application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ai_chat)
 # ===== STARTUP =====
 
 async def start_bot():
-    await set_webhook()
     asyncio.create_task(send_daily_report())
     from hypercorn.asyncio import serve
     from hypercorn.config import Config
