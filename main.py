@@ -549,25 +549,49 @@ application.add_error_handler(error_handler)
 
 
 # ===== STARTUP / MAIN =====
+# ===== CHẠY BOT BẰNG POLLING =====
+async def send_daily_report_task():
+    """Tác vụ chạy nền gửi báo cáo hàng ngày"""
+    await asyncio.sleep(5)  # chờ bot khởi động ổn định
+    while True:
+        cfg = load_config()
+        h, m = map(int, cfg.get("report_time", "08:00").split(":"))
+        now = datetime.now()
+        report_dt = datetime.combine(now.date(), dt_time(hour=h, minute=m))
+        if now > report_dt:
+            report_dt += timedelta(days=1)
+        await asyncio.sleep((report_dt - now).total_seconds())
+        try:
+            msg = await generate_report_msg()
+            if GROUP_ID:
+                await application.bot.send_message(
+                    int(GROUP_ID), msg, parse_mode="HTML", disable_web_page_preview=True
+                )
+            for uid in load_config().get("users", {}):
+                await application.bot.send_message(
+                    int(uid), msg, parse_mode="HTML", disable_web_page_preview=True
+                )
+        except Exception as e:
+            logger.error(f"⚠️ Lỗi gửi báo cáo: {e}")
+
+
 async def main():
-    # start background tasks after initialize/start
     logger.info("Khởi tạo application...")
-    # initialize & start (but run_polling will do start again safely)
-    await application.initialize()
-    await application.start()
-    # start background task for daily reports
-    asyncio.create_task(send_daily_report_task(application))
+    asyncio.create_task(send_daily_report_task())
+
+    # Xóa webhook cũ (nếu có)
+    try:
+        await application.bot.delete_webhook(drop_pending_updates=True)
+    except Exception as e:
+        logger.warning(f"Lỗi xóa webhook: {e}")
+
     logger.info("🤖 Bot đang chạy bằng polling...")
-    # run polling (this will block until stopped)
-    await application.updater.start_polling()
-    # idle until termination
-    await application.updater.idle()
-    # graceful stop
-    await application.stop()
-    await application.shutdown()
+    await application.run_polling(stop_signals=None)
 
 
 if __name__ == "__main__":
+    asyncio.run(main())
+
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
