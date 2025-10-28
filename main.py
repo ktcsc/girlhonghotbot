@@ -549,10 +549,9 @@ application.add_error_handler(error_handler)
 
 
 # ===== STARTUP / MAIN =====
-# ===== CHẠY BOT BẰNG POLLING =====
-async def send_daily_report_task():
+async def send_daily_report_task(app: Application):
     """Tác vụ chạy nền gửi báo cáo hàng ngày"""
-    await asyncio.sleep(5)  # chờ bot khởi động ổn định
+    await asyncio.sleep(5)
     while True:
         cfg = load_config()
         h, m = map(int, cfg.get("report_time", "08:00").split(":"))
@@ -561,38 +560,35 @@ async def send_daily_report_task():
         if now > report_dt:
             report_dt += timedelta(days=1)
         await asyncio.sleep((report_dt - now).total_seconds())
+
         try:
             msg = await generate_report_msg()
             if GROUP_ID:
-                await application.bot.send_message(
+                await app.bot.send_message(
                     int(GROUP_ID), msg, parse_mode="HTML", disable_web_page_preview=True
                 )
-            for uid in load_config().get("users", {}):
-                await application.bot.send_message(
+            for uid in cfg.get("users", {}):
+                await app.bot.send_message(
                     int(uid), msg, parse_mode="HTML", disable_web_page_preview=True
                 )
         except Exception as e:
             logger.error(f"⚠️ Lỗi gửi báo cáo: {e}")
 
 
-async def main():
-    logger.info("Khởi tạo application...")
-    asyncio.create_task(send_daily_report_task())
-
-    # Xóa webhook cũ (nếu có)
+async def post_init(app: Application):
+    """Chạy sau khi Application khởi tạo"""
+    asyncio.create_task(send_daily_report_task(app))
     try:
-        await application.bot.delete_webhook(drop_pending_updates=True)
+        await app.bot.delete_webhook(drop_pending_updates=True)
+        logger.info("🧹 Đã xóa webhook cũ, chuyển sang polling.")
     except Exception as e:
         logger.warning(f"Lỗi xóa webhook: {e}")
 
-    logger.info("🤖 Bot đang chạy bằng polling...")
-    await application.run_polling(stop_signals=None)
+
+application.post_init = post_init
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    logger.info("🤖 Bot đang chạy bằng polling...")
+    application.run_polling(stop_signals=None)
 
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        logger.info("Bot stopped by user.")
